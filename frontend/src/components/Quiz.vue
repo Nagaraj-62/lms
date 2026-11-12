@@ -15,754 +15,930 @@
 			</div>
 		</div>
 	</AssessmentCard>
-	<div v-else-if="quiz.data" class="space-y-4">
-		<AssessmentCard>
-			<AssessmentCardHeader
-				icon="lucide-circle-help"
-				:title="__('Quiz')"
-				:subtitle="
-					activeQuestion > 0 && !quizSubmission.data ? quizSubtitle : undefined
-				"
-			>
-				<Badge
-					v-if="proctoringRunning"
-					data-testid="violation-count"
-					size="sm"
-					:theme="violationCount > 0 ? 'red' : 'green'"
-				>
-					<template #prefix>
-						<span class="lucide-camera size-3" aria-hidden="true" />
-					</template>
-					{{ violationCount }} / {{ quiz.data.max_violations }}
-					{{
-						quiz.data.max_violations == 1 ? __('violation') : __('violations')
-					}}
-				</Badge>
-				<!-- After a submit the result says it beside Try again. -->
-				<span
-					v-if="
-						!preview &&
-						attemptsReady &&
-						attemptsLeft !== null &&
-						!quizSubmission.data &&
-						!scheduleBlocked
+	<div
+		v-else-if="quiz.data"
+		ref="quizContainer"
+		class="quiz-container bg-surface-base"
+		:class="{
+			'fullscreen-quiz min-h-screen overflow-y-auto w-full p-4 md:py-8':
+				isFullscreenActive,
+			'space-y-4': !isFullscreenActive,
+		}"
+	>
+		<div
+			:class="{
+				'w-full md:w-3/5 mx-auto space-y-4': isFullscreenActive,
+				'space-y-4': !isFullscreenActive,
+			}"
+		>
+			<AssessmentCard>
+				<AssessmentCardHeader
+					icon="lucide-circle-help"
+					:title="__('Quiz')"
+					:subtitle="
+						activeQuestion > 0 && !quizSubmission.data
+							? quizSubtitle
+							: undefined
 					"
-					class="hidden text-xs text-ink-gray-6 sm:inline"
 				>
-					{{ attemptsLeftLabel(attemptsLeft) }}
-				</span>
-				<Badge
-					v-if="
-						activeQuestion > 0 && !quizSubmission.data && quiz.data.duration
-					"
-					data-testid="quiz-timer"
-					size="sm"
-					:theme="timerTheme"
-				>
-					<template #prefix>
-						<span class="lucide-timer size-3" />
-					</template>
-					{{ formatTimer(timer) }}
-				</Badge>
-			</AssessmentCardHeader>
+					<Badge
+						v-if="proctoringRunning"
+						data-testid="violation-count"
+						size="sm"
+						:theme="violationCount > 0 ? 'red' : 'green'"
+					>
+						<template #prefix>
+							<span class="lucide-camera size-3" aria-hidden="true" />
+						</template>
+						{{ violationCount }} / {{ quiz.data.max_violations }}
+						{{
+							quiz.data.max_violations == 1 ? __('violation') : __('violations')
+						}}
+					</Badge>
+					<!-- After a submit the result says it beside Try again. -->
+					<span
+						v-if="
+							!preview &&
+							attemptsReady &&
+							attemptsLeft !== null &&
+							!quizSubmission.data &&
+							!scheduleBlocked
+						"
+						class="hidden text-xs text-ink-gray-6 sm:inline"
+					>
+						{{ attemptsLeftLabel(attemptsLeft) }}
+					</span>
+					<Badge
+						v-if="
+							activeQuestion > 0 && !quizSubmission.data && quiz.data.duration
+						"
+						data-testid="quiz-timer"
+						size="sm"
+						:theme="timerTheme"
+					>
+						<template #prefix>
+							<span class="lucide-timer size-3" />
+						</template>
+						{{ formatTimer(timer) }}
+					</Badge>
+				</AssessmentCardHeader>
 
-			<!-- The monitor runs detection and floats its camera over the page, so it
+				<!-- The monitor runs detection and floats its camera over the page, so it
 			     needs no room here; zero height, not display:none, so its first
 			     video still plays while it starts. The count sits in the header. -->
-			<div v-if="proctoringRunning" class="h-0 overflow-hidden">
-				<ProctoringMonitor
-					:active="proctoringActive"
-					@violation="handleViolation"
-					@warning="handleWarning"
-					@camera-ready="() => {}"
-					@camera-denied="() => {}"
-				/>
-			</div>
+				<div v-if="proctoringRunning" class="h-0 overflow-hidden">
+					<ProctoringMonitor
+						:active="proctoringActive"
+						@violation="handleViolation"
+						@warning="handleWarning"
+						@camera-ready="() => {}"
+						@camera-denied="() => {}"
+					/>
+				</div>
 
-			<div v-if="activeQuestion == 0">
-				<!-- What the quiz is comes first, then the rules for taking it. -->
-				<!-- Before it opens and after it closes the quiz can't be taken, so its
+				<div v-if="activeQuestion == 0">
+					<!-- What the quiz is comes first, then the rules for taking it. -->
+					<!-- Before it opens and after it closes the quiz can't be taken, so its
 				     numbers and rules stay hidden and the notice says when. -->
-				<div
-					class="space-y-3.5 p-3.5"
-					:class="{
-						'border-b border-outline-gray-1': !scheduleBlocked || inVideo,
-					}"
-				>
-					<div class="text-base-semibold text-ink-gray-9">
-						{{ quiz.data.title }}
-					</div>
-					<QuizStats
-						v-if="!scheduleBlocked"
-						:questions="questions.length"
-						:duration="quiz.data.duration"
-						:passingPercentage="quiz.data.passing_percentage"
-						:attemptsLeft="preview ? null : attemptsLeft"
-						:maxAttempts="preview ? quiz.data.max_attempts : null"
-						:attemptsLoading="!attemptsReady"
-					/>
-					<Alert
-						v-if="scheduleNotice"
-						data-testid="quiz-schedule-notice"
-						:data-state="scheduleNotice.state"
-						:theme="scheduleNotice.theme"
-						:icon="SCHEDULE_ICONS[scheduleNotice.state]"
-						:title="scheduleNotice.title"
-						:description="scheduleNotice.description"
-					/>
-				</div>
-
-				<div
-					v-if="
-						introTips.length &&
-						questions.length &&
-						!attemptsExhausted &&
-						!scheduleBlocked
-					"
-					class="space-y-2 border-b border-outline-gray-1 p-3.5"
-				>
-					<div class="text-sm text-ink-gray-6">
-						{{ __('Before you start') }}
-					</div>
-					<ol class="space-y-1.5">
-						<li
-							v-for="(tip, index) in introTips"
-							:key="index"
-							class="flex gap-x-2 text-p-base text-ink-gray-7"
-						>
-							<span class="shrink-0 font-mono text-ink-gray-4">
-								{{ index + 1 }}
-							</span>
-							<span>{{ tip }}</span>
-						</li>
-					</ol>
-				</div>
-
-				<div v-if="!scheduleBlocked || inVideo" class="space-y-3.5 p-3.5">
-					<template v-if="scheduleBlocked">
-						<Button @click="props.backToVideo()">{{
-							__('Resume Video')
-						}}</Button>
-					</template>
-					<template v-else-if="!questions.length">
-						<p class="text-p-base text-ink-gray-6">
-							{{ __('This quiz has no questions available yet.') }}
-						</p>
-						<Button v-if="inVideo" @click="props.backToVideo()">{{
-							__('Resume Video')
-						}}</Button>
-					</template>
-					<template v-else-if="attemptsUnknown">
-						<p class="text-p-base text-ink-gray-6">
-							{{
-								__(
-									"Your past attempts didn't load. Try again to start the quiz."
-								)
-							}}
-						</p>
-						<div class="flex items-center gap-2">
-							<Button v-if="inVideo" @click="props.backToVideo()">
-								{{ __('Resume Video') }}
-							</Button>
-							<Button :loading="attempts.loading" @click="attempts.reload()">
-								{{ __('Try again') }}
-							</Button>
-						</div>
-					</template>
-					<template v-else-if="attemptsExhausted">
-						<FeedbackBanner :correct="false">
-							{{
-								__(
-									"You've used all {0} {1} for this quiz. Reach out to your instructor if you need to try again."
-								).format(
-									quiz.data.max_attempts,
-									quiz.data.max_attempts == 1 ? __('attempt') : __('attempts')
-								)
-							}}
-						</FeedbackBanner>
-						<Button v-if="inVideo" @click="props.backToVideo()">{{
-							__('Resume Video')
-						}}</Button>
-					</template>
 					<div
-						v-if="
-							isProctoringEligible &&
-							attemptsReady &&
-							!attemptsExhausted &&
-							!scheduleBlocked
-						"
-						class="-mx-3.5 -mt-3.5 grid border-b border-outline-gray-1 md:grid-cols-2 md:divide-x md:divide-outline-gray-1 rtl:divide-x-reverse"
+						class="space-y-3.5 p-3.5"
+						:class="{
+							'border-b border-outline-gray-1': !scheduleBlocked || inVideo,
+						}"
 					>
-						<!-- One band split by a divider, not two boxed cards: the quiz card
-						     is the only box. It is the first thing in this section whenever it
-						     shows, hence the negative top margin against the rules above. -->
-						<div
-							class="flex flex-col gap-3 border-b border-outline-gray-1 p-3.5 md:border-b-0"
-						>
-							<div class="text-sm-semibold text-ink-gray-8">
-								{{ __('Camera Setup') }}
-							</div>
-							<div class="flex min-h-[18rem] flex-1 flex-col md:min-h-0">
-								<ProctoringMonitor
-									class="flex min-h-0 flex-1 flex-col"
-									:active="false"
-									@camera-ready="cameraReady = true"
-									@camera-lost="cameraReady = false"
-									@camera-denied="() => {}"
-									@violation="handleViolation"
-									@warning="handleWarning"
-								/>
-							</div>
+						<div class="text-base-semibold text-ink-gray-9">
+							{{ quiz.data.title }}
 						</div>
-
-						<div class="flex flex-col gap-1 p-3.5">
-							<div class="text-sm-semibold text-ink-gray-8">
-								{{ __('Proctoring Rules') }}
-							</div>
-							<div class="divide-y divide-outline-gray-1">
-								<div
-									v-for="rule in proctoringRules"
-									:key="rule.icon"
-									class="flex items-start gap-3 py-2.5"
-								>
-									<span
-										:class="rule.icon"
-										class="mt-0.5 size-4 shrink-0 text-ink-gray-5"
-									/>
-									<div>
-										<div class="text-sm text-ink-gray-8">
-											{{ rule.title }}
-										</div>
-										<div class="mt-0.5 text-p-sm text-ink-gray-6">
-											{{ rule.hint }}
-										</div>
-									</div>
-								</div>
-								<div class="flex items-start gap-3 py-2.5">
-									<span
-										class="lucide-alert-triangle mt-0.5 size-4 shrink-0 text-ink-orange-4"
-									/>
-									<div class="text-p-sm text-ink-orange-5">
-										{{
-											__(
-												'After {0} {1}, the quiz will be automatically submitted.'
-											).format(
-												quiz.data.max_violations,
-												quiz.data.max_violations == 1
-													? __('violation')
-													: __('violations')
-											)
-										}}
-									</div>
-								</div>
-							</div>
-						</div>
+						<QuizStats
+							v-if="!scheduleBlocked"
+							:questions="questions.length"
+							:duration="quiz.data.duration"
+							:passingPercentage="quiz.data.passing_percentage"
+							:attemptsLeft="preview ? null : attemptsLeft"
+							:maxAttempts="preview ? quiz.data.max_attempts : null"
+							:attemptsLoading="!attemptsReady"
+						/>
+						<Alert
+							v-if="scheduleNotice"
+							data-testid="quiz-schedule-notice"
+							:data-state="scheduleNotice.state"
+							:theme="scheduleNotice.theme"
+							:icon="SCHEDULE_ICONS[scheduleNotice.state]"
+							:title="scheduleNotice.title"
+							:description="scheduleNotice.description"
+						/>
 					</div>
 
-					<!-- Last, after the camera and the rules: the learner reads them and sees the
-					     camera turn ready on the way to the button it unlocks. -->
 					<div
 						v-if="
+							introTips.length &&
 							questions.length &&
-							attemptsReady &&
 							!attemptsExhausted &&
 							!scheduleBlocked
 						"
-						class="flex flex-wrap items-center justify-between gap-3"
+						class="space-y-2 border-b border-outline-gray-1 p-3.5"
 					>
-						<span class="text-sm text-ink-gray-6">
-							<template v-if="isProctoringEligible && !cameraReady">
-								{{
-									__(
-										'Position your face in the camera to enable the start button.'
-									)
-								}}
-							</template>
-						</span>
-						<div class="flex items-center gap-2">
+						<div class="text-sm text-ink-gray-6">
+							{{ __('Before you start') }}
+						</div>
+						<ol class="space-y-1.5">
+							<li
+								v-for="(tip, index) in introTips"
+								:key="index"
+								class="flex gap-x-2 text-p-base text-ink-gray-7"
+							>
+								<span class="shrink-0 font-mono text-ink-gray-4">
+									{{ index + 1 }}
+								</span>
+								<span>{{ tip }}</span>
+							</li>
+						</ol>
+					</div>
+
+					<div v-if="!scheduleBlocked || inVideo" class="space-y-3.5 p-3.5">
+						<template v-if="scheduleBlocked">
+							<Button @click="props.backToVideo()">{{
+								__('Resume Video')
+							}}</Button>
+						</template>
+						<template v-else-if="!questions.length">
+							<p class="text-p-base text-ink-gray-6">
+								{{ __('This quiz has no questions available yet.') }}
+							</p>
 							<Button v-if="inVideo" @click="props.backToVideo()">{{
 								__('Resume Video')
 							}}</Button>
-							<Button
-								variant="solid"
-								:disabled="isProctoringEligible && !cameraReady"
-								@click="startQuiz"
+						</template>
+						<template v-else-if="attemptsUnknown">
+							<p class="text-p-base text-ink-gray-6">
+								{{
+									__(
+										"Your past attempts didn't load. Try again to start the quiz."
+									)
+								}}
+							</p>
+							<div class="flex items-center gap-2">
+								<Button v-if="inVideo" @click="props.backToVideo()">
+									{{ __('Resume Video') }}
+								</Button>
+								<Button :loading="attempts.loading" @click="attempts.reload()">
+									{{ __('Try again') }}
+								</Button>
+							</div>
+						</template>
+						<template v-else-if="attemptsExhausted">
+							<FeedbackBanner :correct="false">
+								{{
+									__(
+										"You've used all {0} {1} for this quiz. Reach out to your instructor if you need to try again."
+									).format(
+										quiz.data.max_attempts,
+										quiz.data.max_attempts == 1 ? __('attempt') : __('attempts')
+									)
+								}}
+							</FeedbackBanner>
+							<Button v-if="inVideo" @click="props.backToVideo()">{{
+								__('Resume Video')
+							}}</Button>
+						</template>
+						<div
+							v-if="
+								isProctoringEligible &&
+								attemptsReady &&
+								!attemptsExhausted &&
+								!scheduleBlocked
+							"
+							class="-mx-3.5 -mt-3.5 grid border-b border-outline-gray-1 md:grid-cols-2 md:divide-x md:divide-outline-gray-1 rtl:divide-x-reverse"
+						>
+							<!-- One band split by a divider, not two boxed cards: the quiz card
+						     is the only box. It is the first thing in this section whenever it
+						     shows, hence the negative top margin against the rules above. -->
+							<div
+								class="flex flex-col gap-3 border-b border-outline-gray-1 p-3.5 md:border-b-0"
 							>
-								{{ __('Start Quiz') }}
-							</Button>
+								<div class="text-sm-semibold text-ink-gray-8">
+									{{ __('Camera Setup') }}
+								</div>
+								<div class="flex min-h-[18rem] flex-1 flex-col md:min-h-0">
+									<ProctoringMonitor
+										class="flex min-h-0 flex-1 flex-col"
+										:active="false"
+										@camera-ready="cameraReady = true"
+										@camera-lost="cameraReady = false"
+										@camera-denied="() => {}"
+										@violation="handleViolation"
+										@warning="handleWarning"
+									/>
+								</div>
+							</div>
+
+							<div class="flex flex-col gap-1 p-3.5">
+								<div class="text-sm-semibold text-ink-gray-8">
+									{{ __('Proctoring Rules') }}
+								</div>
+								<div class="divide-y divide-outline-gray-1">
+									<div
+										v-for="rule in proctoringRules"
+										:key="rule.icon"
+										class="flex items-start gap-3 py-2.5"
+									>
+										<span
+											:class="rule.icon"
+											class="mt-0.5 size-4 shrink-0 text-ink-gray-5"
+										/>
+										<div>
+											<div class="text-sm text-ink-gray-8">
+												{{ rule.title }}
+											</div>
+											<div class="mt-0.5 text-p-sm text-ink-gray-6">
+												{{ rule.hint }}
+											</div>
+										</div>
+									</div>
+									<div class="flex items-start gap-3 py-2.5">
+										<span
+											class="lucide-alert-triangle mt-0.5 size-4 shrink-0 text-ink-orange-4"
+										/>
+										<div class="text-p-sm text-ink-orange-5">
+											{{
+												__(
+													'After {0} {1}, the quiz will be automatically submitted.'
+												).format(
+													quiz.data.max_violations,
+													quiz.data.max_violations == 1
+														? __('violation')
+														: __('violations')
+												)
+											}}
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- Last, after the camera and the rules: the learner reads them and sees the
+					     camera turn ready on the way to the button it unlocks. -->
+						<div
+							v-if="
+								questions.length &&
+								attemptsReady &&
+								!attemptsExhausted &&
+								!scheduleBlocked
+							"
+							class="flex flex-wrap items-center justify-between gap-3"
+						>
+							<span class="text-sm text-ink-gray-6">
+								<template v-if="isProctoringEligible && !cameraReady">
+									{{
+										__(
+											'Position your face in the camera to enable the start button.'
+										)
+									}}
+								</template>
+							</span>
+							<div class="flex items-center gap-2">
+								<Button v-if="inVideo" @click="props.backToVideo()">{{
+									__('Resume Video')
+								}}</Button>
+								<Button
+									variant="solid"
+									:disabled="isProctoringEligible && !cameraReady"
+									@click="startQuiz"
+								>
+									{{ __('Start Quiz') }}
+								</Button>
+							</div>
 						</div>
 					</div>
+				</div>
+
+				<div
+					v-else-if="!quizSubmission.data"
+					class="relative"
+					:class="{ 'select-none': proctoringRunning }"
+				>
+					<!-- Overlay when defocused during proctored quiz -->
+					<div
+						v-if="
+							examLocked &&
+							!isWindowFocused &&
+							!showFullscreenWarning &&
+							!showSidePanelWarning &&
+							!fullscreenPending
+						"
+						class="absolute inset-0 z-40 flex flex-col items-center justify-center rounded-6 bg-surface-base/90 backdrop-blur-md p-6 text-center shadow-lg"
+						role="dialog"
+						aria-modal="true"
+						aria-labelledby="quiz-focus-lost-title"
+						@click="handleRefocus"
+					>
+						<div
+							class="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-surface-amber-2 text-ink-amber-5"
+						>
+							<span class="lucide-alert-circle size-6" />
+						</div>
+						<h3
+							id="quiz-focus-lost-title"
+							class="text-base-semibold text-ink-gray-9"
+						>
+							{{ __('Exam Paused — Window Focus Lost') }}
+						</h3>
+						<p class="mt-1 text-sm text-ink-gray-6 max-w-sm">
+							{{
+								__(
+									'Click here to return focus to the exam. Leaving the exam window is recorded as a violation.'
+								)
+							}}
+						</p>
+						<Button
+							class="mt-4"
+							variant="solid"
+							size="sm"
+							@click="handleRefocus"
+						>
+							{{ __('Return to Exam') }}
+						</Button>
+					</div>
+
+					<div
+						data-testid="quiz-attempt"
+						:inert="examLocked || undefined"
+						:class="{
+							'pointer-events-none select-none blur-lg': examLocked,
+						}"
+					>
+						<template
+							v-for="(question, qtidx) in questions"
+							:key="question.name"
+						>
+							<div v-if="qtidx == activeQuestion - 1 && questionDetails.data">
+								<div
+									class="flex h-11 items-center gap-3 border-b border-outline-gray-1 bg-surface-gray-1 px-3.5"
+								>
+									<span class="shrink-0 text-sm text-ink-gray-6">
+										{{
+											__('Question {0} of {1}').format(
+												activeQuestion,
+												questions.length
+											)
+										}}
+									</span>
+									<div
+										role="progressbar"
+										class="min-w-0 flex-1"
+										:aria-label="__('Quiz progress')"
+										aria-valuemin="0"
+										:aria-valuemax="questions.length"
+										:aria-valuenow="activeQuestion"
+										:aria-valuetext="
+											__('Question {0} of {1}').format(
+												activeQuestion,
+												questions.length
+											)
+										"
+									>
+										<Progress
+											size="sm"
+											aria-hidden="true"
+											:value="(activeQuestion / questions.length) * 100"
+										/>
+									</div>
+									<span class="shrink-0 text-sm text-ink-gray-6">
+										{{ question.marks }}
+										{{ question.marks == 1 ? __('Mark') : __('Marks') }}
+									</span>
+								</div>
+
+								<div class="space-y-3 p-3.5">
+									<div class="space-y-1">
+										<div class="text-sm text-ink-gray-6">
+											{{
+												questionDetails.data.type == 'Open Ended'
+													? __('Written response')
+													: getInstructions(questionDetails.data)
+											}}
+										</div>
+										<div
+											:id="questionTextId"
+											class="text-p-base font-semibold text-ink-gray-9 break-words [&_img]:h-auto [&_img]:max-w-full"
+											v-safe-html:rich="questionDetails.data.question"
+										></div>
+									</div>
+
+									<div
+										v-if="questionDetails.data.type == 'Choices'"
+										:role="
+											questionDetails.data.multiple ? 'group' : 'radiogroup'
+										"
+										:aria-labelledby="questionTextId"
+										class="flex flex-col gap-1.5"
+									>
+										<template v-for="index in MAX_OPTIONS" :key="index">
+											<template v-if="questionDetails.data[`option_${index}`]">
+												<OptionRow>
+													<template #control>
+														<input
+															:type="
+																questionDetails.data.multiple
+																	? 'checkbox'
+																	: 'radio'
+															"
+															:name="`${optionGroup}-${activeQuestion}`"
+															class="size-3.5 shrink-0 text-ink-gray-9 focus:ring-outline-elevation-2"
+															:class="
+																questionDetails.data.multiple
+																	? 'rounded-1'
+																	: 'border-outline-gray-4 bg-surface-base checked:border-4 checked:border-[color:var(--ink-gray-9)] checked:bg-surface-base checked:bg-none'
+															"
+															:disabled="!!showAnswers.length"
+															:checked="!!selectedOptions[index - 1]"
+															@change="markAnswer(index)"
+														/>
+													</template>
+													<span
+														v-safe-html:rich="
+															questionDetails.data[`option_${index}`]
+														"
+													></span>
+													<template
+														v-if="showAnswers.length && quiz.data.show_answers"
+														#end
+													>
+														<template v-if="showAnswers[index - 1] == 1">
+															<span
+																class="lucide-check-circle size-4 shrink-0 text-ink-green-4"
+																aria-hidden="true"
+															/>
+															<span class="sr-only">
+																{{ __('Your answer, correct') }}
+															</span>
+														</template>
+														<template v-else-if="showAnswers[index - 1] == 2">
+															<span
+																class="lucide-minus-circle size-4 shrink-0 text-ink-green-4"
+																aria-hidden="true"
+															/>
+															<span class="sr-only">{{
+																__('Correct answer')
+															}}</span>
+														</template>
+														<template v-else-if="showAnswers[index - 1] == 0">
+															<span
+																class="lucide-x-circle size-4 shrink-0 text-ink-red-5"
+																aria-hidden="true"
+															/>
+															<span class="sr-only">
+																{{ __('Your answer, incorrect') }}
+															</span>
+														</template>
+													</template>
+												</OptionRow>
+												<div
+													v-if="questionDetails.data[`explanation_${index}`]"
+													v-show="showAnswers.length"
+													class="break-words px-3 text-p-base text-ink-gray-7"
+												>
+													{{ questionDetails.data[`explanation_${index}`] }}
+												</div>
+											</template>
+										</template>
+										<div role="status" class="empty:absolute">
+											<FeedbackBanner
+												v-if="showAnswers.length && quiz.data.show_answers"
+												data-testid="quiz-feedback"
+												:correct="choiceCorrect"
+											>
+												{{ choiceCorrect ? __('Correct') : __('Incorrect') }}
+											</FeedbackBanner>
+										</div>
+									</div>
+									<div
+										v-else-if="questionDetails.data.type == 'User Input'"
+										class="space-y-3"
+									>
+										<FormControl
+											v-model="possibleAnswer"
+											type="textarea"
+											:aria-labelledby="questionTextId"
+											:disabled="showAnswers.length ? true : false"
+										/>
+										<div role="status" class="empty:absolute">
+											<FeedbackBanner
+												v-if="showAnswers.length"
+												data-testid="quiz-feedback"
+												:correct="!!showAnswers[0]"
+											>
+												{{ showAnswers[0] ? __('Correct') : __('Incorrect') }}
+											</FeedbackBanner>
+										</div>
+									</div>
+									<div v-else>
+										<RichTextEditor
+											:content="possibleAnswer"
+											@change="(val) => (possibleAnswer = val)"
+											:editable="true"
+											:fixedMenu="true"
+											minHeight="7rem"
+											:ariaLabelledby="questionTextId"
+										/>
+									</div>
+
+									<div class="flex flex-wrap items-center gap-4 pt-2">
+										<div class="flex-1">
+											<Checkbox
+												v-if="!quiz.data.show_answers"
+												:label="__('Mark for review')"
+												:model-value="reviewQuestions.includes(activeQuestion)"
+												@update:model-value="
+													(checked) => markForReview(!!checked, activeQuestion)
+												"
+											/>
+											<span
+												v-else-if="questionDetails.data.type == 'Open Ended'"
+												class="text-sm text-ink-gray-6"
+											>
+												{{ __('Marked by your instructor') }}
+											</span>
+										</div>
+										<div class="flex flex-1 justify-end gap-2">
+											<Button
+												v-if="!quiz.data.show_answers && activeQuestion > 1"
+												@click="switchQuestion(activeQuestion - 1)"
+											>
+												<span>{{ __('Previous') }}</span>
+											</Button>
+											<Button
+												v-if="
+													quiz.data.show_answers &&
+													!showAnswers.length &&
+													questionDetails.data.type != 'Open Ended'
+												"
+												variant="solid"
+												@click="checkAnswer()"
+											>
+												<span>{{ __('Check') }}</span>
+											</Button>
+											<Button
+												v-else-if="activeQuestion != questions.length"
+												:variant="quiz.data.show_answers ? 'solid' : 'subtle'"
+												@click="
+													quiz.data.show_answers
+														? nextQuestion()
+														: switchQuestion(activeQuestion + 1)
+												"
+											>
+												<span>{{ __('Next') }}</span>
+											</Button>
+											<Button
+												v-else-if="!preview"
+												variant="solid"
+												:loading="isSubmitting"
+												:disabled="isSubmitting"
+												@click="handleSubmitClick()"
+											>
+												<span>{{ __('Submit') }}</span>
+											</Button>
+										</div>
+									</div>
+								</div>
+							</div>
+						</template>
+					</div>
+				</div>
+
+				<div v-else>
+					<div class="space-y-3 p-3.5">
+						<h2 ref="summaryHeading" tabindex="-1" class="sr-only">
+							{{ __('Quiz result') }}
+						</h2>
+						<p
+							v-if="quizSubmission.data.is_open_ended"
+							class="text-p-base text-ink-gray-7"
+						>
+							{{
+								__(
+									"Your submission has been successfully saved. The instructor will review and grade it shortly, and you'll be notified of your final result."
+								)
+							}}
+						</p>
+						<template v-else>
+							<div class="space-y-2">
+								<Badge
+									data-testid="quiz-verdict"
+									size="md"
+									:theme="passed ? 'green' : 'red'"
+								>
+									{{ passed ? __('Passed') : __('Failed') }}
+								</Badge>
+								<p class="text-base tabular-nums text-ink-gray-8">
+									{{
+										__('{0} of {1} marks').format(
+											quizSubmission.data.score,
+											quizSubmission.data.score_out_of
+										)
+									}}<span class="mx-2 text-ink-gray-4" aria-hidden="true"
+										>·</span
+									>{{ Math.ceil(quizSubmission.data.percentage) }}%
+								</p>
+							</div>
+							<ul
+								v-if="answerCounts.length"
+								data-testid="answer-counts"
+								class="flex flex-wrap gap-x-4 gap-y-1 text-sm tabular-nums text-ink-gray-7"
+							>
+								<li
+									v-for="count in answerCounts"
+									:key="count.label"
+									class="flex items-center gap-1.5"
+								>
+									<span
+										class="size-1.5 shrink-0 rounded-full"
+										:class="count.dot"
+										aria-hidden="true"
+									/>
+									{{ count.label }}
+								</li>
+							</ul>
+						</template>
+						<p v-if="endedNote" class="text-p-base text-ink-gray-7">
+							{{ endedNote }}
+						</p>
+						<div
+							v-if="retakeNote || canRetake || inVideo"
+							class="flex flex-wrap items-center justify-between gap-3"
+						>
+							<span class="text-sm text-ink-gray-6">{{ retakeNote }}</span>
+							<div class="flex items-center gap-2">
+								<Button v-if="inVideo" @click="props.backToVideo()">
+									{{ __('Resume Video') }}
+								</Button>
+								<Button
+									v-if="canRetake"
+									:variant="passed ? 'subtle' : 'solid'"
+									@click="resetQuiz()"
+								>
+									{{ __('Try again') }}
+								</Button>
+							</div>
+						</div>
+					</div>
+					<div
+						v-if="isProctoringEligible && summaryLog.length"
+						class="border-t border-outline-gray-1 p-3.5"
+					>
+						<QuizActivityLog :entries="summaryLog" />
+					</div>
+				</div>
+			</AssessmentCard>
+
+			<div
+				v-if="
+					activeQuestion > 0 &&
+					!quizSubmission.data &&
+					isProctoringEligible &&
+					summaryLog.length
+				"
+				class="rounded-6 border border-outline-gray-2 p-3.5"
+				:inert="examLocked || undefined"
+			>
+				<QuizActivityLog :entries="summaryLog" />
+			</div>
+
+			<div
+				v-if="
+					activeQuestion > 0 && !quizSubmission.data && !quiz.data.show_answers
+				"
+				data-testid="quiz-question-nav"
+				class="rounded-6 border border-outline-gray-2 p-3.5"
+				:inert="examLocked || undefined"
+				:class="{ 'pointer-events-none select-none blur-lg': examLocked }"
+			>
+				<div class="text-sm-semibold text-ink-gray-9">
+					{{ __('Questions') }}
+				</div>
+				<nav
+					:aria-label="__('Question navigation')"
+					class="mt-2 flex flex-wrap items-center gap-2"
+				>
+					<button
+						v-for="index in questions.length"
+						:key="index"
+						type="button"
+						:aria-label="
+							(attemptedQuestions.includes(index)
+								? __('Question {0}, answered')
+								: __('Question {0}, not answered')
+							).format(index)
+						"
+						:aria-current="activeQuestion == index ? 'step' : undefined"
+						@click="switchQuestion(index)"
+						class="relative flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-sm"
+						:class="{
+							'bg-surface-gray-7 text-ink-base font-medium':
+								activeQuestion == index,
+							'bg-surface-blue-2 text-ink-blue-5':
+								activeQuestion != index && attemptedQuestions.includes(index),
+							'bg-surface-gray-3':
+								activeQuestion != index && !attemptedQuestions.includes(index),
+						}"
+					>
+						{{ index }}
+						<CircleCheck
+							v-if="attemptedQuestions.includes(index)"
+							class="absolute -top-1.5 -end-1.5 size-4 stroke-1.5 shrink-0 rounded-full bg-surface-base text-ink-green-8 fill-none"
+							aria-hidden="true"
+						/>
+					</button>
+				</nav>
+			</div>
+
+			<div
+				v-if="
+					activeQuestion > 0 && !quizSubmission.data && reviewQuestions.length
+				"
+				class="rounded-6 border border-outline-gray-2 p-3.5"
+				:inert="examLocked || undefined"
+				:class="{ 'pointer-events-none select-none blur-lg': examLocked }"
+			>
+				<div class="text-sm-semibold text-ink-gray-9">
+					{{ __('Questions marked for review') }}
+				</div>
+				<div class="mt-2 flex flex-wrap items-center gap-2">
+					<button
+						v-for="index in reviewQuestions"
+						:key="index"
+						type="button"
+						@click="switchQuestion(index)"
+						class="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-surface-gray-3 text-sm"
+					>
+						{{ index }}
+					</button>
 				</div>
 			</div>
 
 			<div
-				v-else-if="!quizSubmission.data"
-				class="relative"
-				:class="{ 'select-none': proctoringRunning }"
+				v-if="
+					quiz.data.show_submission_history &&
+					attempts?.data &&
+					attempts.data.length > 0
+				"
+				class="mt-10"
 			>
-				<!-- Overlay when defocused during proctored quiz -->
+				<ResponsiveListView
+					:columns="getSubmissionColumns()"
+					:rows="attempts.data ?? []"
+					row-key="name"
+					title-key="creation"
+					:options="getSubmissionOptions()"
+				/>
+			</div>
+		</div>
+
+		<!-- Full-screen requirement modal -->
+		<div
+			v-if="
+				fullscreenRunning &&
+				!submitting &&
+				!submissionReason &&
+				showFullscreenWarning
+			"
+			class="fixed inset-0 z-50 flex items-center justify-center bg-black-overlay-700 backdrop-blur-sm p-4 text-center"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="quiz-fullscreen-title"
+		>
+			<div
+				class="w-full max-w-md rounded-7 border border-outline-gray-2 bg-surface-base p-6 text-ink-gray-9 shadow-2xl"
+			>
 				<div
-					v-if="
-						examLocked &&
-						!isWindowFocused &&
-						!showFullscreenWarning &&
-						!showSidePanelWarning &&
-						!fullscreenPending
-					"
-					class="absolute inset-0 z-40 flex flex-col items-center justify-center rounded-6 bg-surface-base/90 backdrop-blur-md p-6 text-center shadow-lg"
-					role="dialog"
-					aria-modal="true"
-					aria-labelledby="quiz-focus-lost-title"
-					@click="handleRefocus"
+					class="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-surface-red-2 text-ink-red-5"
 				>
-					<div
-						class="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-surface-amber-2 text-ink-amber-5"
+					<span class="lucide-maximize size-6" />
+				</div>
+				<h3
+					id="quiz-fullscreen-title"
+					class="text-lg font-semibold text-ink-gray-9"
+				>
+					{{ __('Full-Screen Mode Required') }}
+				</h3>
+				<p class="mt-2 text-sm text-ink-gray-6">
+					{{
+						isProctoringEligible
+							? __(
+									'This exam has to stay in full-screen. Return to full-screen to continue.'
+							  )
+							: __(
+									'This quiz requires full-screen mode. Return to full-screen to continue.'
+							  )
+					}}
+				</p>
+				<div class="mt-6">
+					<Button
+						variant="solid"
+						theme="red"
+						size="md"
+						class="w-full justify-center"
+						@click="reEnterFullscreen"
 					>
-						<span class="lucide-alert-circle size-6" />
-					</div>
-					<h3
-						id="quiz-focus-lost-title"
-						class="text-base-semibold text-ink-gray-9"
-					>
-						{{ __('Exam Paused — Window Focus Lost') }}
-					</h3>
-					<p class="mt-1 text-sm text-ink-gray-6 max-w-sm">
-						{{
-							__(
-								'Click here to return focus to the exam. Leaving the exam window is recorded as a violation.'
-							)
-						}}
-					</p>
-					<Button class="mt-4" variant="solid" size="sm" @click="handleRefocus">
-						{{ __('Return to Exam') }}
+						{{ __('Return to Full-Screen') }}
 					</Button>
 				</div>
-
-				<div
-					data-testid="quiz-attempt"
-					:inert="examLocked || undefined"
-					:class="{
-						'pointer-events-none select-none blur-lg': examLocked,
-					}"
-				>
-					<template v-for="(question, qtidx) in questions" :key="question.name">
-						<div v-if="qtidx == activeQuestion - 1 && questionDetails.data">
-							<div
-								class="flex h-11 items-center gap-3 border-b border-outline-gray-1 bg-surface-gray-1 px-3.5"
-							>
-								<span class="shrink-0 text-sm text-ink-gray-6">
-									{{
-										__('Question {0} of {1}').format(
-											activeQuestion,
-											questions.length
-										)
-									}}
-								</span>
-								<div
-									role="progressbar"
-									class="min-w-0 flex-1"
-									:aria-label="__('Quiz progress')"
-									aria-valuemin="0"
-									:aria-valuemax="questions.length"
-									:aria-valuenow="activeQuestion"
-									:aria-valuetext="
-										__('Question {0} of {1}').format(
-											activeQuestion,
-											questions.length
-										)
-									"
-								>
-									<Progress
-										size="sm"
-										aria-hidden="true"
-										:value="(activeQuestion / questions.length) * 100"
-									/>
-								</div>
-								<span class="shrink-0 text-sm text-ink-gray-6">
-									{{ question.marks }}
-									{{ question.marks == 1 ? __('Mark') : __('Marks') }}
-								</span>
-							</div>
-
-							<div class="space-y-3 p-3.5">
-								<div class="space-y-1">
-									<div class="text-sm text-ink-gray-6">
-										{{
-											questionDetails.data.type == 'Open Ended'
-												? __('Written response')
-												: getInstructions(questionDetails.data)
-										}}
-									</div>
-									<div
-										:id="questionTextId"
-										class="text-p-base font-semibold text-ink-gray-9 break-words [&_img]:h-auto [&_img]:max-w-full"
-										v-safe-html:rich="questionDetails.data.question"
-									></div>
-								</div>
-
-								<div
-									v-if="questionDetails.data.type == 'Choices'"
-									:role="questionDetails.data.multiple ? 'group' : 'radiogroup'"
-									:aria-labelledby="questionTextId"
-									class="flex flex-col gap-1.5"
-								>
-									<template v-for="index in MAX_OPTIONS" :key="index">
-										<template v-if="questionDetails.data[`option_${index}`]">
-											<OptionRow>
-												<template #control>
-													<input
-														:type="
-															questionDetails.data.multiple
-																? 'checkbox'
-																: 'radio'
-														"
-														:name="`${optionGroup}-${activeQuestion}`"
-														class="size-3.5 shrink-0 text-ink-gray-9 focus:ring-outline-elevation-2"
-														:class="
-															questionDetails.data.multiple
-																? 'rounded-1'
-																: 'border-outline-gray-4 bg-surface-base checked:border-4 checked:border-[color:var(--ink-gray-9)] checked:bg-surface-base checked:bg-none'
-														"
-														:disabled="!!showAnswers.length"
-														:checked="!!selectedOptions[index - 1]"
-														@change="markAnswer(index)"
-													/>
-												</template>
-												<span
-													v-safe-html:rich="
-														questionDetails.data[`option_${index}`]
-													"
-												></span>
-												<template
-													v-if="showAnswers.length && quiz.data.show_answers"
-													#end
-												>
-													<template v-if="showAnswers[index - 1] == 1">
-														<span
-															class="lucide-check-circle size-4 shrink-0 text-ink-green-4"
-															aria-hidden="true"
-														/>
-														<span class="sr-only">
-															{{ __('Your answer, correct') }}
-														</span>
-													</template>
-													<template v-else-if="showAnswers[index - 1] == 2">
-														<span
-															class="lucide-minus-circle size-4 shrink-0 text-ink-green-4"
-															aria-hidden="true"
-														/>
-														<span class="sr-only">{{
-															__('Correct answer')
-														}}</span>
-													</template>
-													<template v-else-if="showAnswers[index - 1] == 0">
-														<span
-															class="lucide-x-circle size-4 shrink-0 text-ink-red-5"
-															aria-hidden="true"
-														/>
-														<span class="sr-only">
-															{{ __('Your answer, incorrect') }}
-														</span>
-													</template>
-												</template>
-											</OptionRow>
-											<div
-												v-if="questionDetails.data[`explanation_${index}`]"
-												v-show="showAnswers.length"
-												class="break-words px-3 text-p-base text-ink-gray-7"
-											>
-												{{ questionDetails.data[`explanation_${index}`] }}
-											</div>
-										</template>
-									</template>
-									<div role="status" class="empty:absolute">
-										<FeedbackBanner
-											v-if="showAnswers.length && quiz.data.show_answers"
-											data-testid="quiz-feedback"
-											:correct="choiceCorrect"
-										>
-											{{ choiceCorrect ? __('Correct') : __('Incorrect') }}
-										</FeedbackBanner>
-									</div>
-								</div>
-								<div
-									v-else-if="questionDetails.data.type == 'User Input'"
-									class="space-y-3"
-								>
-									<FormControl
-										v-model="possibleAnswer"
-										type="textarea"
-										:aria-labelledby="questionTextId"
-										:disabled="showAnswers.length ? true : false"
-									/>
-									<div role="status" class="empty:absolute">
-										<FeedbackBanner
-											v-if="showAnswers.length"
-											data-testid="quiz-feedback"
-											:correct="!!showAnswers[0]"
-										>
-											{{ showAnswers[0] ? __('Correct') : __('Incorrect') }}
-										</FeedbackBanner>
-									</div>
-								</div>
-								<div v-else>
-									<RichTextEditor
-										:content="possibleAnswer"
-										@change="(val) => (possibleAnswer = val)"
-										:editable="true"
-										:fixedMenu="true"
-										minHeight="7rem"
-										:ariaLabelledby="questionTextId"
-									/>
-								</div>
-
-								<div class="flex flex-wrap items-center gap-4 pt-2">
-									<div class="flex-1">
-										<Checkbox
-											v-if="!quiz.data.show_answers"
-											:label="__('Mark for review')"
-											:model-value="reviewQuestions.includes(activeQuestion)"
-											@update:model-value="
-												(checked) => markForReview(!!checked, activeQuestion)
-											"
-										/>
-										<span
-											v-else-if="questionDetails.data.type == 'Open Ended'"
-											class="text-sm text-ink-gray-6"
-										>
-											{{ __('Marked by your instructor') }}
-										</span>
-									</div>
-									<div class="flex flex-1 justify-end gap-2">
-										<Button
-											v-if="!quiz.data.show_answers && activeQuestion > 1"
-											@click="switchQuestion(activeQuestion - 1)"
-										>
-											<span>{{ __('Previous') }}</span>
-										</Button>
-										<Button
-											v-if="
-												quiz.data.show_answers &&
-												!showAnswers.length &&
-												questionDetails.data.type != 'Open Ended'
-											"
-											variant="solid"
-											@click="checkAnswer()"
-										>
-											<span>{{ __('Check') }}</span>
-										</Button>
-										<Button
-											v-else-if="activeQuestion != questions.length"
-											:variant="quiz.data.show_answers ? 'solid' : 'subtle'"
-											@click="
-												quiz.data.show_answers
-													? nextQuestion()
-													: switchQuestion(activeQuestion + 1)
-											"
-										>
-											<span>{{ __('Next') }}</span>
-										</Button>
-										<Button
-											v-else-if="!preview"
-											variant="solid"
-											:loading="isSubmitting"
-											:disabled="isSubmitting"
-											@click="handleSubmitClick()"
-										>
-											<span>{{ __('Submit') }}</span>
-										</Button>
-									</div>
-								</div>
-							</div>
-						</div>
-					</template>
-				</div>
 			</div>
-
-			<div v-else>
-				<div class="space-y-3 p-3.5">
-					<h2 ref="summaryHeading" tabindex="-1" class="sr-only">
-						{{ __('Quiz result') }}
-					</h2>
-					<p
-						v-if="quizSubmission.data.is_open_ended"
-						class="text-p-base text-ink-gray-7"
-					>
-						{{
-							__(
-								"Your submission has been successfully saved. The instructor will review and grade it shortly, and you'll be notified of your final result."
-							)
-						}}
-					</p>
-					<template v-else>
-						<div class="space-y-2">
-							<Badge
-								data-testid="quiz-verdict"
-								size="md"
-								:theme="passed ? 'green' : 'red'"
-							>
-								{{ passed ? __('Passed') : __('Failed') }}
-							</Badge>
-							<p class="text-base tabular-nums text-ink-gray-8">
-								{{
-									__('{0} of {1} marks').format(
-										quizSubmission.data.score,
-										quizSubmission.data.score_out_of
-									)
-								}}<span class="mx-2 text-ink-gray-4" aria-hidden="true">·</span
-								>{{ Math.ceil(quizSubmission.data.percentage) }}%
-							</p>
-						</div>
-						<ul
-							v-if="answerCounts.length"
-							data-testid="answer-counts"
-							class="flex flex-wrap gap-x-4 gap-y-1 text-sm tabular-nums text-ink-gray-7"
-						>
-							<li
-								v-for="count in answerCounts"
-								:key="count.label"
-								class="flex items-center gap-1.5"
-							>
-								<span
-									class="size-1.5 shrink-0 rounded-full"
-									:class="count.dot"
-									aria-hidden="true"
-								/>
-								{{ count.label }}
-							</li>
-						</ul>
-					</template>
-					<p v-if="endedNote" class="text-p-base text-ink-gray-7">
-						{{ endedNote }}
-					</p>
-					<div
-						v-if="retakeNote || canRetake || inVideo"
-						class="flex flex-wrap items-center justify-between gap-3"
-					>
-						<span class="text-sm text-ink-gray-6">{{ retakeNote }}</span>
-						<div class="flex items-center gap-2">
-							<Button v-if="inVideo" @click="props.backToVideo()">
-								{{ __('Resume Video') }}
-							</Button>
-							<Button
-								v-if="canRetake"
-								:variant="passed ? 'subtle' : 'solid'"
-								@click="resetQuiz()"
-							>
-								{{ __('Try again') }}
-							</Button>
-						</div>
-					</div>
-				</div>
-				<div
-					v-if="isProctoringEligible && summaryLog.length"
-					class="border-t border-outline-gray-1 p-3.5"
-				>
-					<QuizActivityLog :entries="summaryLog" />
-				</div>
-			</div>
-		</AssessmentCard>
-
-		<div
-			v-if="
-				activeQuestion > 0 &&
-				!quizSubmission.data &&
-				isProctoringEligible &&
-				summaryLog.length
-			"
-			class="rounded-6 border border-outline-gray-2 p-3.5"
-			:inert="examLocked || undefined"
-		>
-			<QuizActivityLog :entries="summaryLog" />
 		</div>
 
+		<!-- Browser side panel warning modal -->
 		<div
 			v-if="
-				activeQuestion > 0 && !quizSubmission.data && !quiz.data.show_answers
+				proctoringRunning &&
+				proctoringActive &&
+				!submitting &&
+				!submissionReason &&
+				!showFullscreenWarning &&
+				showSidePanelWarning
 			"
-			data-testid="quiz-question-nav"
-			class="rounded-6 border border-outline-gray-2 p-3.5"
-			:inert="examLocked || undefined"
-			:class="{ 'pointer-events-none select-none blur-lg': examLocked }"
+			class="fixed inset-0 z-50 flex items-center justify-center bg-black-overlay-700 backdrop-blur-md p-4 text-center"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="quiz-side-panel-title"
 		>
-			<div class="text-sm-semibold text-ink-gray-9">
-				{{ __('Questions') }}
-			</div>
-			<nav
-				:aria-label="__('Question navigation')"
-				class="mt-2 flex flex-wrap items-center gap-2"
+			<div
+				class="w-full max-w-md rounded-7 border border-outline-gray-2 bg-surface-base p-6 text-ink-gray-9 shadow-2xl"
 			>
-				<button
-					v-for="index in questions.length"
-					:key="index"
-					type="button"
-					:aria-label="
-						(attemptedQuestions.includes(index)
-							? __('Question {0}, answered')
-							: __('Question {0}, not answered')
-						).format(index)
-					"
-					:aria-current="activeQuestion == index ? 'step' : undefined"
-					@click="switchQuestion(index)"
-					class="relative flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-sm"
-					:class="{
-						'bg-surface-gray-7 text-ink-base font-medium':
-							activeQuestion == index,
-						'bg-surface-blue-2 text-ink-blue-5':
-							activeQuestion != index && attemptedQuestions.includes(index),
-						'bg-surface-gray-3':
-							activeQuestion != index && !attemptedQuestions.includes(index),
-					}"
+				<div
+					class="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-surface-red-2 text-ink-red-5"
 				>
-					{{ index }}
-					<CircleCheck
-						v-if="attemptedQuestions.includes(index)"
-						class="absolute -top-1.5 -end-1.5 size-4 stroke-1.5 shrink-0 rounded-full bg-surface-base text-ink-green-8 fill-none"
-						aria-hidden="true"
-					/>
-				</button>
-			</nav>
-		</div>
-
-		<div
-			v-if="
-				activeQuestion > 0 && !quizSubmission.data && reviewQuestions.length
-			"
-			class="rounded-6 border border-outline-gray-2 p-3.5"
-			:inert="examLocked || undefined"
-			:class="{ 'pointer-events-none select-none blur-lg': examLocked }"
-		>
-			<div class="text-sm-semibold text-ink-gray-9">
-				{{ __('Questions marked for review') }}
-			</div>
-			<div class="mt-2 flex flex-wrap items-center gap-2">
-				<button
-					v-for="index in reviewQuestions"
-					:key="index"
-					type="button"
-					@click="switchQuestion(index)"
-					class="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-surface-gray-3 text-sm"
+					<span class="lucide-alert-triangle size-6" />
+				</div>
+				<h3
+					id="quiz-side-panel-title"
+					class="text-lg font-semibold text-ink-gray-9"
 				>
-					{{ index }}
-				</button>
+					{{ __('Side Panel Detected') }}
+				</h3>
+				<p class="mt-2 text-sm text-ink-gray-6">
+					{{
+						__(
+							'Browser side panel is active. Using side panels or secondary browser views during the exam is prohibited.'
+						)
+					}}
+				</p>
+				<p class="mt-2 text-xs text-ink-red-5 font-medium">
+					{{
+						__(
+							'Please close the side panel (click the "X" button at the corner of the side panel) and then click Resume.'
+						)
+					}}
+				</p>
+				<div class="mt-6">
+					<Button
+						variant="solid"
+						theme="red"
+						size="md"
+						class="w-full justify-center"
+						@click="handleResumeAfterSidePanel"
+					>
+						{{ __('I Have Closed Side Panel — Resume') }}
+					</Button>
+				</div>
 			</div>
 		</div>
 
+		<!-- Instant Submitting on Max Violations Overlay -->
 		<div
-			v-if="
-				quiz.data.show_submission_history &&
-				attempts?.data &&
-				attempts.data.length > 0
-			"
-			class="mt-10"
+			v-if="!quizSubmission.data && isSubmittingMaxViolations"
+			class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black-overlay-700 backdrop-blur-md p-4 text-center"
+			role="alertdialog"
+			aria-modal="true"
+			aria-labelledby="quiz-max-violations-title"
 		>
-			<ResponsiveListView
-				:columns="getSubmissionColumns()"
-				:rows="attempts.data ?? []"
-				row-key="name"
-				title-key="creation"
-				:options="getSubmissionOptions()"
-			/>
+			<div
+				class="w-full max-w-md rounded-7 border border-outline-gray-2 bg-surface-base p-6 text-ink-gray-9 shadow-2xl text-center"
+			>
+				<div
+					class="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-surface-red-2 text-ink-red-5 animate-pulse"
+				>
+					<span class="lucide-alert-octagon size-6" />
+				</div>
+				<h3
+					id="quiz-max-violations-title"
+					class="text-lg font-semibold text-ink-gray-9"
+				>
+					{{ __('Maximum Violations Limit Reached') }}
+				</h3>
+				<p class="mt-2 text-sm text-ink-gray-6">
+					{{
+						__(
+							'The maximum permitted proctoring violations have been reached. Your exam is being automatically submitted now.'
+						)
+					}}
+				</p>
+				<div
+					class="mt-6 flex items-center justify-center gap-2 text-sm text-ink-gray-6"
+				>
+					<Spinner class="size-4" />
+					<span>{{ __('Submitting exam...') }}</span>
+				</div>
+			</div>
 		</div>
 	</div>
 	<EmptyStateLayout
@@ -892,152 +1068,6 @@
 			</p>
 		</template>
 	</Dialog>
-
-	<Teleport to="body">
-		<!-- Full-screen requirement modal -->
-		<div
-			v-if="
-				proctoringRunning &&
-				proctoringActive &&
-				!submitting &&
-				!submissionReason &&
-				showFullscreenWarning
-			"
-			class="fixed inset-0 z-50 flex items-center justify-center bg-black-overlay-700 backdrop-blur-sm p-4 text-center"
-			role="dialog"
-			aria-modal="true"
-			aria-labelledby="quiz-fullscreen-title"
-		>
-			<div
-				class="w-full max-w-md rounded-7 border border-outline-gray-2 bg-surface-base p-6 text-ink-gray-9 shadow-2xl"
-			>
-				<div
-					class="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-surface-red-2 text-ink-red-5"
-				>
-					<span class="lucide-maximize size-6" />
-				</div>
-				<h3
-					id="quiz-fullscreen-title"
-					class="text-lg font-semibold text-ink-gray-9"
-				>
-					{{ __('Full-Screen Mode Required') }}
-				</h3>
-				<p class="mt-2 text-sm text-ink-gray-6">
-					{{
-						__(
-							'This exam has to stay in full-screen. Return to full-screen to continue.'
-						)
-					}}
-				</p>
-				<div class="mt-6">
-					<Button
-						variant="solid"
-						theme="red"
-						size="md"
-						class="w-full justify-center"
-						@click="reEnterFullscreen"
-					>
-						{{ __('Return to Full-Screen') }}
-					</Button>
-				</div>
-			</div>
-		</div>
-
-		<!-- Browser side panel warning modal -->
-		<div
-			v-if="
-				proctoringRunning &&
-				proctoringActive &&
-				!submitting &&
-				!submissionReason &&
-				!showFullscreenWarning &&
-				showSidePanelWarning
-			"
-			class="fixed inset-0 z-50 flex items-center justify-center bg-black-overlay-700 backdrop-blur-md p-4 text-center"
-			role="dialog"
-			aria-modal="true"
-			aria-labelledby="quiz-side-panel-title"
-		>
-			<div
-				class="w-full max-w-md rounded-7 border border-outline-gray-2 bg-surface-base p-6 text-ink-gray-9 shadow-2xl"
-			>
-				<div
-					class="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-surface-red-2 text-ink-red-5"
-				>
-					<span class="lucide-alert-triangle size-6" />
-				</div>
-				<h3
-					id="quiz-side-panel-title"
-					class="text-lg font-semibold text-ink-gray-9"
-				>
-					{{ __('Side Panel Detected') }}
-				</h3>
-				<p class="mt-2 text-sm text-ink-gray-6">
-					{{
-						__(
-							'Browser side panel is active. Using side panels or secondary browser views during the exam is prohibited.'
-						)
-					}}
-				</p>
-				<p class="mt-2 text-xs text-ink-red-5 font-medium">
-					{{
-						__(
-							'Please close the side panel (click the "X" button at the corner of the side panel) and then click Resume.'
-						)
-					}}
-				</p>
-				<div class="mt-6">
-					<Button
-						variant="solid"
-						theme="red"
-						size="md"
-						class="w-full justify-center"
-						@click="handleResumeAfterSidePanel"
-					>
-						{{ __('I Have Closed Side Panel — Resume') }}
-					</Button>
-				</div>
-			</div>
-		</div>
-
-		<!-- Instant Submitting on Max Violations Overlay -->
-		<div
-			v-if="!quizSubmission.data && isSubmittingMaxViolations"
-			class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black-overlay-700 backdrop-blur-md p-4 text-center"
-			role="alertdialog"
-			aria-modal="true"
-			aria-labelledby="quiz-max-violations-title"
-		>
-			<div
-				class="w-full max-w-md rounded-7 border border-outline-gray-2 bg-surface-base p-6 text-ink-gray-9 shadow-2xl text-center"
-			>
-				<div
-					class="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-surface-red-2 text-ink-red-5 animate-pulse"
-				>
-					<span class="lucide-alert-octagon size-6" />
-				</div>
-				<h3
-					id="quiz-max-violations-title"
-					class="text-lg font-semibold text-ink-gray-9"
-				>
-					{{ __('Maximum Violations Limit Reached') }}
-				</h3>
-				<p class="mt-2 text-sm text-ink-gray-6">
-					{{
-						__(
-							'The maximum permitted proctoring violations have been reached. Your exam is being automatically submitted now.'
-						)
-					}}
-				</p>
-				<div
-					class="mt-6 flex items-center justify-center gap-2 text-sm text-ink-gray-6"
-				>
-					<Spinner class="size-4" />
-					<span>{{ __('Submitting exam...') }}</span>
-				</div>
-			</div>
-		</div>
-	</Teleport>
 </template>
 <script setup lang="ts">
 import {
@@ -1173,6 +1203,16 @@ const timer = ref(0)
 let timerInterval: ReturnType<typeof setInterval> | undefined
 const violationCount = ref(0)
 const proctoringActive = ref(false)
+const quizContainer = ref<HTMLElement | null>(null)
+const isFullscreenActive = ref(false)
+
+const isFullscreenEnforced = computed<boolean>(() => {
+	if (props.preview || props.inVideo || props.isEmbeddedInLesson) {
+		return false
+	}
+	return Boolean(quiz.data?.enforce_fullscreen || isProctoringEligible.value)
+})
+
 // A proctored attempt in progress: the monitor is watching and the count shows.
 const proctoringRunning = computed(
 	() =>
@@ -1180,6 +1220,14 @@ const proctoringRunning = computed(
 		!quizSubmission.data &&
 		isProctoringEligible.value
 )
+
+const fullscreenRunning = computed(
+	() =>
+		activeQuestion.value > 0 &&
+		!quizSubmission.data &&
+		isFullscreenEnforced.value
+)
+
 const cameraReady = ref(false)
 const violationLog = ref<ViolationEvent[]>([])
 const submissionReason = ref<SubmissionReason | ''>('')
@@ -1188,7 +1236,7 @@ const showFullscreenWarning = ref(false)
 const showSidePanelWarning = ref(false)
 const isWindowFocused = ref(true)
 const isSubmittingMaxViolations = ref(false)
-// True from the moment a proctored attempt asks for fullscreen until the browser
+// True from the moment a fullscreen attempt asks for fullscreen until the browser
 // has entered it or the warning modal has taken over. requestFullscreen is
 // asynchronous, and the questions used to stay usable for that whole wait.
 const fullscreenPending = ref(false)
@@ -1213,8 +1261,7 @@ const scheduleViewportCheck = (delay: number) => {
 
 const examLocked = computed(
 	() =>
-		proctoringRunning.value &&
-		proctoringActive.value &&
+		fullscreenRunning.value &&
 		(fullscreenPending.value ||
 			!isWindowFocused.value ||
 			showFullscreenWarning.value ||
@@ -1223,25 +1270,29 @@ const examLocked = computed(
 
 const requestFullscreen = () => {
 	try {
-		const docEl = document.documentElement as HTMLElement & {
-			webkitRequestFullscreen?: () => void
-			msRequestFullscreen?: () => void
+		const target = (quizContainer.value ||
+			document.documentElement) as HTMLElement & {
+			webkitRequestFullscreen?: () => Promise<void> | void
+			mozRequestFullScreen?: () => Promise<void> | void
+			msRequestFullscreen?: () => Promise<void> | void
 		}
 		if (currentFullscreenElement()) return
-		let pending: Promise<void> | undefined
-		if (docEl.requestFullscreen) {
-			pending = docEl.requestFullscreen()
-		} else if (docEl.webkitRequestFullscreen) {
-			docEl.webkitRequestFullscreen()
-		} else if (docEl.msRequestFullscreen) {
-			docEl.msRequestFullscreen()
+		let pending: Promise<void> | void | undefined
+		if (target.requestFullscreen) {
+			pending = target.requestFullscreen()
+		} else if (target.webkitRequestFullscreen) {
+			pending = target.webkitRequestFullscreen()
+		} else if (target.mozRequestFullScreen) {
+			pending = target.mozRequestFullScreen()
+		} else if (target.msRequestFullscreen) {
+			pending = target.msRequestFullscreen()
 		}
-		// A rejected request never fires fullscreenchange, so the warning would
-		// otherwise wait on the fallback timer while the questions stay usable.
-		pending?.catch(() => {
-			fullscreenPending.value = false
-			checkViewportSecurity()
-		})
+		if (pending && typeof (pending as Promise<void>).catch === 'function') {
+			;(pending as Promise<void>).catch(() => {
+				fullscreenPending.value = false
+				checkViewportSecurity()
+			})
+		}
 	} catch {
 		fullscreenPending.value = false
 		checkViewportSecurity()
@@ -1281,9 +1332,7 @@ const isSidePanelOpen = (): boolean =>
 
 const checkViewportSecurity = () => {
 	if (
-		!isProctoringEligible.value ||
-		!proctoringRunning.value ||
-		!proctoringActive.value ||
+		!fullscreenRunning.value ||
 		submitting ||
 		submissionReason.value ||
 		quizSubmission.loading ||
@@ -1297,7 +1346,11 @@ const checkViewportSecurity = () => {
 	if (isFullscreenSupported() && !currentFullscreenElement()) {
 		showFullscreenWarning.value = true
 		showSidePanelWarning.value = false
-	} else if (isSidePanelOpen()) {
+	} else if (
+		isProctoringEligible.value &&
+		proctoringActive.value &&
+		isSidePanelOpen()
+	) {
 		showFullscreenWarning.value = false
 		showSidePanelWarning.value = true
 		const now = Date.now()
@@ -1351,7 +1404,9 @@ const handleResumeAfterSidePanel = () => {
 }
 
 const handleFullscreenChange = () => {
-	if (!currentFullscreenElement()) {
+	const currentFs = currentFullscreenElement()
+	isFullscreenActive.value = Boolean(currentFs)
+	if (!currentFs) {
 		clearTimeout(viewportCheckTimeout)
 		fullscreenPending.value = false
 		checkViewportSecurity()
@@ -1364,11 +1419,16 @@ const handleFullscreenChange = () => {
 }
 
 const reEnterFullscreen = () => {
+	if (fullscreenRunning.value) {
+		fullscreenPending.value = true
+	}
+	showFullscreenWarning.value = false
 	requestFullscreen()
 	scheduleViewportCheck(400)
 }
 
 onMounted(() => {
+	isFullscreenActive.value = Boolean(currentFullscreenElement())
 	window.addEventListener('pagehide', handlePageHide)
 	window.addEventListener('beforeunload', handleBeforeUnload)
 	for (const eventName of FULLSCREEN_CHANGE_EVENTS) {
@@ -1939,6 +1999,8 @@ const startQuiz = () => {
 	if (quiz.data.duration) startTimer()
 	if (isProctoringEligible.value) {
 		proctoringActive.value = true
+	}
+	if (isFullscreenEnforced.value) {
 		if (isFullscreenSupported() && !currentFullscreenElement()) {
 			fullscreenPending.value = true
 		}

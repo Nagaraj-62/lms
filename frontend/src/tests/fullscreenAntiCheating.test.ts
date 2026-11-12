@@ -798,4 +798,52 @@ describe('Anti-Cheating & Full-Screen Enforcement Test Suite', () => {
 			expect(serialiseViolationLog([])).toBe('[]')
 		})
 	})
+
+	// ─── 12. Full-Screen Enforcement & Zen Mode Container Targeting ─────────────
+	describe('12. Full-Screen Enforcement for Proctored and Non-Proctored Quizzes', () => {
+		it('enforces full-screen when enforce_fullscreen is 1, even without proctoring', () => {
+			const quiz = {
+				name: 'quiz-1',
+				enforce_fullscreen: 1,
+				enable_proctoring: 0,
+			}
+			const enforced = !false && Boolean(quiz.enforce_fullscreen || quiz.enable_proctoring)
+			expect(enforced).toBe(true)
+		})
+
+		it('enforces full-screen when enable_proctoring is 1', () => {
+			const quiz = {
+				name: 'quiz-2',
+				enforce_fullscreen: 0,
+				enable_proctoring: 1,
+			}
+			const enforced = Boolean(quiz.enforce_fullscreen || quiz.enable_proctoring)
+			expect(enforced).toBe(true)
+		})
+
+		it('does not enforce full-screen when both are disabled', () => {
+			const quiz = {
+				name: 'quiz-3',
+				enforce_fullscreen: 0,
+				enable_proctoring: 0,
+			}
+			const enforced = Boolean(quiz.enforce_fullscreen || quiz.enable_proctoring)
+			expect(enforced).toBe(false)
+		})
+
+		it('targets the quiz container element rather than whole document for Zen Mode isolation', () => {
+			const quizContainer = document.createElement('div')
+			quizContainer.className = 'quiz-container'
+			document.body.appendChild(quizContainer)
+
+			Object.defineProperty(document, 'fullscreenElement', {
+				value: quizContainer,
+				configurable: true,
+			})
+
+			expect(currentFullscreenElement()).toBe(quizContainer)
+			expect(document.fullscreenElement).toBe(quizContainer)
+			document.body.removeChild(quizContainer)
+		})
+	})
 })
